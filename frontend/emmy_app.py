@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 
+
 load_dotenv()
 
 # Configure Gemini API key
@@ -11,12 +12,33 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 BACKEND_URL = "https://emmy-email-assistant.onrender.com"
 
+
 st.set_page_config(page_title="💌 EMMY - Your AI Email Assistant", layout="centered")
 st.title("💌 Meet EMMY")
 st.write("Your AI-powered email assistant. Draft and send professional emails with attachments in seconds.")
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
+
+# Function to fetch authenticated user email from backend
+def fetch_authenticated_user_email():
+    try:
+        response = requests.get(f"{BACKEND_URL}/get_authenticated_user")
+        if response.status_code == 200:
+            user_email = response.json().get("email")
+            if user_email:
+                st.session_state.user_email = user_email
+                st.success(f"Logged in as {user_email}")
+            else:
+                st.warning("User not authenticated yet.")
+        else:
+            st.error("Failed to fetch authenticated user info.")
+    except Exception as e:
+        st.error(f"Error fetching authenticated user: {e}")
+
+# Fetch authenticated user email on app start
+if "user_email" not in st.session_state:
+    fetch_authenticated_user_email()
 
 # Step 1: Authenticate Gmail via backend
 if st.button("🔑 Authenticate with Gmail"):
@@ -34,6 +56,9 @@ if st.button("🔑 Authenticate with Gmail"):
 to = st.text_input("Recipient Email")
 prompt = st.text_area("What should Emmy write?")
 uploaded_file = st.file_uploader("📎 Attach a file (optional)", type=["pdf", "docx", "txt", "png", "jpg", "jpeg"])
+
+
+import re
 
 def ai_generate_email(prompt):
     """Generate subject and body using Gemini without placeholders."""
@@ -58,23 +83,26 @@ def ai_generate_email(prompt):
         Prachi Adhalage
         [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
         """)
-    
-    text = response.text
-    subject = "Generated Email"  # Default fallback
-    body = text.strip()
-    
-    if "Subject:" in text and "Body:" in text:
-        try:
-            # Extract subject line - get text between 'Subject:' and 'Body:'
-            subject_part = text.split("Subject:")[1].split("Body:")[0]
-            subject = subject_part.strip()
-            
-            # Extract body after 'Body:'
-            body = text.split("Body:")[1].strip()
-        except (IndexError, AttributeError) as e:
-            # If parsing fails, keep defaults
-            print(f"Parsing error: {e}. Using default values.")
-    
+
+    text = response.text.strip()
+    print("Gemini response text:", text)  # Debug to check output
+
+    subject = ""
+    body = ""
+
+    subject_match = re.search(r"Subject:\s*(.*)", text)
+    body_match = re.search(r"Body:\s*(.*)", text, re.DOTALL)
+
+    if subject_match:
+        subject = subject_match.group(1).strip()
+    else:
+        print("Warning: Subject not found in API response.")
+
+    if body_match:
+        body = body_match.group(1).strip()
+    else:
+        print("Warning: Body not found in API response.")
+
     return subject, body
 
 
@@ -92,6 +120,7 @@ if st.button("✨ Generate Draft"):
             "attachment": uploaded_file
         })
 
+
 for idx, msg in enumerate(st.session_state.chat_history):
     st.markdown(f"🤖 **EMMY’s Draft:**")
 
@@ -105,22 +134,25 @@ for idx, msg in enumerate(st.session_state.chat_history):
         st.markdown(f"📎 Attached: **{msg['attachment'].name}**")
 
     if st.button(f"📨 Send Email to {msg['to']}", key=f"send_{idx}"):
-        payload = {
-            "user_email": "",  # You need to capture and supply the authenticated user's email here
-            "recipient": msg["to"],
-            "subject": msg["subject"],
-            "body": msg["body"]
-        }
-        files = None
-        if msg["attachment"]:
-            files = {
-                "file": (msg["attachment"].name, msg["attachment"].getvalue())
+        if "user_email" not in st.session_state or not st.session_state.user_email:
+            st.warning("Please authenticate first before sending emails.")
+        else:
+            payload = {
+                "user_email": st.session_state.user_email,
+                "recipient": msg["to"],
+                "subject": msg["subject"],
+                "body": msg["body"]
             }
-        try:
-            response = requests.post(f"{BACKEND_URL}/send_email", json=payload, files=files)
-            if response.ok:
-                st.success("✅ Email sent successfully!")
-            else:
-                st.error(f"❌ Failed to send email: {response.text}")
-        except Exception as e:
-            st.error(f"Error sending email: {e}")
+            files = None
+            if msg["attachment"]:
+                files = {
+                    "file": (msg["attachment"].name, msg["attachment"].getvalue())
+                }
+            try:
+                response = requests.post(f"{BACKEND_URL}/send_email", json=payload, files=files)
+                if response.ok:
+                    st.success("✅ Email sent successfully!")
+                else:
+                    st.error(f"❌ Failed to send email: {response.text}")
+            except Exception as e:
+                st.error(f"Error sending email: {e}")
