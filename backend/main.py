@@ -15,6 +15,32 @@ from email.mime.text import MIMEText
 
 app = FastAPI()
 
+
+import os
+import sqlite3
+
+DB_PATH = os.path.join(os.getcwd(), "backend", "db.sqlite")
+print(f"SQLite DB path: {DB_PATH}")
+
+os.makedirs("backend", exist_ok=True)
+print(f"DB directory 'backend' exists or created.")
+
+print(f"DB exists before creation? {os.path.exists(DB_PATH)}")
+
+conn = sqlite3.connect(DB_PATH)
+print("Connected to SQLite DB")
+
+cursor = conn.cursor()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS tokens (
+    email TEXT PRIMARY KEY,
+    token TEXT
+)
+""")
+conn.commit()
+print("Created tokens table if not existing")
+conn.close()
+
 # Allow frontend requests (Update with your actual Streamlit frontend URL, no trailing slash)
 app.add_middleware(
     CORSMiddleware,
@@ -24,19 +50,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# DB setup for tokens
-DB_PATH = "backend/db.sqlite"
-os.makedirs("backend", exist_ok=True)
-conn = sqlite3.connect(DB_PATH)
-cursor = conn.cursor()
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS tokens (
-    email TEXT PRIMARY KEY,
-    token TEXT
-)
-""")
-conn.commit()
-conn.close()
+
 
 SCOPES = ["https://mail.google.com/"]
 
