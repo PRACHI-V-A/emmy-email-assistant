@@ -36,12 +36,13 @@ conn.close()
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 REDIRECT_URI = "https://emmy-email-assistant.onrender.com/oauth2callback"
+#flow = Flow.from_client_secrets_file("/etc/secrets/GOOGLE_CLIENT_SECRETS", scopes=SCOPES, redirect_uri=REDIRECT_URI)
 
 # Endpoint to get OAuth authorization URL
 @app.get("/auth-url")
 def get_auth_url():
     flow = Flow.from_client_secrets_file(
-        "backend/credentials.json",
+        "/etc/secrets/GOOGLE_CLIENT_SECRETS",
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI,
     )
