@@ -40,7 +40,7 @@ def ai_generate_email(prompt):
     model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(f"""
         Write a complete professional, polite email based on this instruction: {prompt}.
-
+        
         RULES:
         - NEVER use placeholders.
         - NEVER invent fake details.
@@ -48,7 +48,7 @@ def ai_generate_email(prompt):
         - End with:
             Prachi Adhalage
             Software Engineer
-            prachiadhalage@gmail.com
+            [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
         Format exactly:
         Subject: <short subject>
         Body:
@@ -56,15 +56,28 @@ def ai_generate_email(prompt):
         <body>
         Sincerely,
         Prachi Adhalage
-        prachiadhalage@gmail.com
+        [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
         """)
-
+    
     text = response.text
-    subject, body = "Generated Email", text.strip()
-    if "Subject:" in text:
-        subject = text.split("Subject:")[1].split("\n").strip()
-        body = text.split("Body:")[1].strip()
+    subject = "Generated Email"  # Default fallback
+    body = text.strip()
+    
+    if "Subject:" in text and "Body:" in text:
+        try:
+            # Extract subject line - get text between 'Subject:' and 'Body:'
+            subject_part = text.split("Subject:")[1].split("Body:")[0]
+            subject = subject_part.strip()
+            
+            # Extract body after 'Body:'
+            body = text.split("Body:")[1].strip()
+        except (IndexError, AttributeError) as e:
+            # If parsing fails, keep defaults
+            print(f"Parsing error: {e}. Using default values.")
+    
     return subject, body
+
+
 
 if st.button("✨ Generate Draft"):
     if not to or not prompt:
