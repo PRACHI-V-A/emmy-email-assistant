@@ -14,7 +14,7 @@ app = FastAPI()
 # Allow frontend requests (update 'allow_origins' to your actual front URL for security)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace "*" with your frontend domain in production
+    allow_origins=["https://emmy-email-assistant.streamlit.app/"],  # Replace "*" with your frontend domain in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
