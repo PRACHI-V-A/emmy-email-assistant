@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS tokens (
 conn.commit()
 conn.close()
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+SCOPES = ["https://mail.google.com/"]
+
 REDIRECT_URI = "https://emmy-email-assistant.onrender.com/oauth2callback"
 
 
