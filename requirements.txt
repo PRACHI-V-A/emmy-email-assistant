@@ -8,3 +8,5 @@ google-auth
 google-generativeai
 python-dotenv
 requests
+uvicorn 
+fastapi
