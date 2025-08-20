@@ -1,0 +1,12 @@
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+openai
+python-dotenv
+streamlit
+google-auth
+google-generativeai
+python-dotenv
+requests
+uvicorn 
+fastapi

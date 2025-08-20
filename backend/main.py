@@ -34,7 +34,7 @@ conn.close()
 
 # Google OAuth setup
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
-REDIRECT_URI = "http://localhost:8000/oauth2callback"
+REDIRECT_URI = "https://emmy-email-assistant.onrender.com"
 
 @app.get("/auth")
 def auth():
