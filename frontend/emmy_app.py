@@ -46,13 +46,15 @@ def authenticate_gmail():
             creds.refresh(Request())
         else:
             # Load client secrets JSON string from Streamlit secrets and write to temp file
-            client_secrets_json = st.secrets["GOOGLE_CLIENT_SECRETS"]
+            client_secrets_json = st.secrets["GOOGLE_CLIENT_SECRETS"].strip()
             with tempfile.NamedTemporaryFile(mode="w+", delete=False) as secret_file:
                 secret_file.write(client_secrets_json)
                 secret_file.flush()
                 flow = InstalledAppFlow.from_client_secrets_file(secret_file.name, SCOPES)
 
-            creds = flow.run_local_server(port=0)
+            # Use console mode for OAuth flow in cloud
+            creds = flow.run_console()
+
         with open(token_path, "wb") as token:
             pickle.dump(creds, token)
 
@@ -67,7 +69,6 @@ def ai_generate_email(prompt):
         f"""
         Write a complete professional, polite email based on this instruction: {prompt}.
 
-
         RULES:
         - NEVER use placeholders like [Recipient], [Project Name], [Reason], etc.
         - NEVER invent fake details.
@@ -76,7 +77,7 @@ def ai_generate_email(prompt):
         - End with:
             Prachi Adhalage
             Software Engineer
-            [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
+            prachiadhalage@gmail.com
         Format exactly:
         Subject: <short subject>
         Body:
@@ -84,7 +85,7 @@ def ai_generate_email(prompt):
         <body>
         Sincerely,
         Prachi Adhalage
-        [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
+        prachiadhalage@gmail.com
         """
     )
 
