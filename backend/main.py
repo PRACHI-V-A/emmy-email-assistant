@@ -1,18 +1,20 @@
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import sqlite3
 import os
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+import json
 
 app = FastAPI()
 
-# Allow frontend requests
+# Allow frontend requests (update 'allow_origins' to your actual front URL for security)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # change to frontend URL if deployed
+    allow_origins=["*"],  # Replace "*" with your frontend domain in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,20 +34,21 @@ CREATE TABLE IF NOT EXISTS tokens (
 conn.commit()
 conn.close()
 
-# Google OAuth setup
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
-REDIRECT_URI = "https://emmy-email-assistant.onrender.com"
+REDIRECT_URI = "https://emmy-email-assistant.onrender.com/oauth2callback"
 
-@app.get("/auth")
-def auth():
+# Endpoint to get OAuth authorization URL
+@app.get("/auth-url")
+def get_auth_url():
     flow = Flow.from_client_secrets_file(
         "backend/credentials.json",
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI,
     )
-    auth_url, _ = flow.authorization_url(prompt="consent")
-    return RedirectResponse(auth_url)
+    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline", include_granted_scopes='true')
+    return {"auth_url": auth_url}
 
+# OAuth2 callback endpoint
 @app.get("/oauth2callback")
 def oauth2callback(request: Request):
     flow = Flow.from_client_secrets_file(
@@ -60,15 +63,45 @@ def oauth2callback(request: Request):
     profile = service.users().getProfile(userId="me").execute()
     email = profile["emailAddress"]
 
-    # Store tokens
+    # Store tokens as JSON string
+    token_json = creds.to_json()
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("REPLACE INTO tokens (email, token) VALUES (?, ?)", (email, creds.to_json()))
+    cursor.execute("REPLACE INTO tokens (email, token) VALUES (?, ?)", (email, token_json))
     conn.commit()
     conn.close()
 
     return JSONResponse({"message": "Authentication successful!", "email": email})
 
+# Pydantic model for send_email request validation
+class EmailRequest(BaseModel):
+    user_email: str
+    recipient: str
+    subject: str
+    body: str
+
+@app.post("/send_email")
+async def send_email(data: EmailRequest):
+    creds = get_credentials(data.user_email)
+    if not creds:
+        raise HTTPException(status_code=403, detail="User not authenticated")
+
+    service = build("gmail", "v1", credentials=creds)
+
+    from email.mime.text import MIMEText
+    import base64
+
+    message = MIMEText(data.body)
+    message["to"] = data.recipient
+    message["subject"] = data.subject
+    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+
+    service.users().messages().send(userId="me", body={"raw": raw_message}).execute()
+
+    return {"message": "Email sent successfully!"}
+
+# Helper function to get Credentials object from DB JSON
 def get_credentials(user_email: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -77,30 +110,7 @@ def get_credentials(user_email: str):
     conn.close()
     if not row:
         return None
-    creds = Credentials.from_authorized_user_info(eval(row[0]), SCOPES)
+    # Safely load JSON string instead of eval
+    token_info = json.loads(row[0])
+    creds = Credentials.from_authorized_user_info(token_info, SCOPES)
     return creds
-
-@app.post("/send_email")
-async def send_email(data: dict):
-    user_email = data.get("user_email")
-    recipient = data.get("recipient")
-    subject = data.get("subject")
-    body = data.get("body")
-
-    creds = get_credentials(user_email)
-    if not creds:
-        return JSONResponse({"error": "User not authenticated"}, status_code=403)
-
-    service = build("gmail", "v1", credentials=creds)
-
-    from email.mime.text import MIMEText
-    import base64
-
-    message = MIMEText(body)
-    message["to"] = recipient
-    message["subject"] = subject
-    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-
-    service.users().messages().send(userId="me", body={"raw": raw_message}).execute()
-
-    return {"message": "Email sent successfully!"}
