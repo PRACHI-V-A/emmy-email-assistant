@@ -12,6 +12,7 @@ from email import encoders
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+import tempfile
 
 # Load environment variables
 load_dotenv()
@@ -21,7 +22,6 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 BACKEND_URL = "https://emmy-email-assistant.onrender.com"
 
-
 st.set_page_config(page_title="💌 EMMY - Your AI Email Assistant", layout="centered")
 st.title("💌 Meet EMMY")
 st.write("Your AI-powered email assistant. Draft and send professional emails with attachments in seconds.")
@@ -30,30 +30,34 @@ st.write("Your AI-powered email assistant. Draft and send professional emails wi
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-
 # ---------------- Gmail Authentication ----------------
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 def authenticate_gmail():
     creds = None
-    if os.path.exists("token.pickle"):
-        with open("token.pickle", "rb") as token:
+    token_path = "token.pickle"
+
+    if os.path.exists(token_path):
+        with open(token_path, "rb") as token:
             creds = pickle.load(token)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
-
+            # Load client secrets JSON string from Streamlit secrets and write to temp file
+            client_secrets_json = st.secrets["GOOGLE_CLIENT_SECRETS"]
+            with tempfile.NamedTemporaryFile(mode="w+", delete=False) as secret_file:
+                secret_file.write(client_secrets_json)
+                secret_file.flush()
+                flow = InstalledAppFlow.from_client_secrets_file(secret_file.name, SCOPES)
 
             creds = flow.run_local_server(port=0)
-        with open("token.pickle", "wb") as token:
+        with open(token_path, "wb") as token:
             pickle.dump(creds, token)
 
     service = build("gmail", "v1", credentials=creds)
     return service
-
 
 # ---------------- AI Draft Generation ----------------
 def ai_generate_email(prompt):
@@ -63,6 +67,7 @@ def ai_generate_email(prompt):
         f"""
         Write a complete professional, polite email based on this instruction: {prompt}.
 
+
         RULES:
         - NEVER use placeholders like [Recipient], [Project Name], [Reason], etc.
         - NEVER invent fake details.
@@ -71,7 +76,7 @@ def ai_generate_email(prompt):
         - End with:
             Prachi Adhalage
             Software Engineer
-            prachiadhalage@gmail.com
+            [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
         Format exactly:
         Subject: <short subject>
         Body:
@@ -79,7 +84,7 @@ def ai_generate_email(prompt):
         <body>
         Sincerely,
         Prachi Adhalage
-        prachiadhalage@gmail.com
+        [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
         """
     )
 
@@ -87,11 +92,10 @@ def ai_generate_email(prompt):
     subject, body = "Generated Email", text.strip()
 
     if "Subject:" in text:
-        subject = text.split("Subject:")[1].split("\n")[0].strip()
+        subject = text.split("Subject:")[1].split("\n").strip()
         body = text.split("Body:")[1].strip()
 
     return subject, body
-
 
 # ---------------- Gmail Message Builder ----------------
 def create_message(sender, to, subject, body, attachment=None):
@@ -122,14 +126,12 @@ def create_message(sender, to, subject, body, attachment=None):
     raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
     return {"raw": raw_message}
 
-
 def send_message(service, user_id, message):
     try:
         sent_message = service.users().messages().send(userId=user_id, body=message).execute()
         return f"✅ Email sent successfully! ID: {sent_message['id']}"
     except Exception as e:
         return f"❌ Error: {e}"
-
 
 # ---------------- Streamlit UI ----------------
 st.subheader("Step 1: Connect your Gmail")
