@@ -19,7 +19,8 @@ load_dotenv()
 # Configure Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = "https://emmy-email-assistant.onrender.com"
+
 
 st.set_page_config(page_title="💌 EMMY - Your AI Email Assistant", layout="centered")
 st.title("💌 Meet EMMY")
