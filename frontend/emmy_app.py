@@ -8,7 +8,7 @@ import google.generativeai as genai
 load_dotenv()
 
 # Configure Gemini API key
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+genai.configure(api_key=os.getenv("OPEN_AI_API"))
 
 BACKEND_URL = "https://emmy-email-assistant.onrender.com"
 
