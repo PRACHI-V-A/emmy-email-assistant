@@ -51,8 +51,11 @@ app.add_middleware(
 )
 
 
+SCOPES = [
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/gmail.send"
+]
 
-SCOPES = ["https://mail.google.com/"]
 
 REDIRECT_URI = "https://emmy-email-assistant.onrender.com/oauth2callback"
 
