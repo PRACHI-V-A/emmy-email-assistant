@@ -68,10 +68,10 @@ import re
 def ai_generate_email(prompt):
     """Generate subject and body using Gemini without placeholders."""
     model = genai.GenerativeModel("gemini-1.5-flash")
-    response = model.generate_content(f"""
-        Write a complete professional, polite email based on this instruction: {prompt}.
-        
-        RULES:
+    response = model.generate_content(
+    f"""
+    Write a complete professional, polite email based on this instruction: {prompt}.
+       RULES:
         - NEVER use placeholders.
         - NEVER invent fake details.
         - Include greeting, body, closing, signature.
@@ -87,8 +87,13 @@ def ai_generate_email(prompt):
         Sincerely,
         Prachi Adhalage
         [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
-        """)
+        """,
+    
+    timeout=60  # Timeout in seconds (increase as needed)
+    )
 
+        
+        
     text = response.text.strip()
     print("Gemini response text:", text)  # Debug to check output
 
