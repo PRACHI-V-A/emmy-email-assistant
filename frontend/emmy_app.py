@@ -68,52 +68,54 @@ import re
 def ai_generate_email(prompt):
     """Generate subject and body using Gemini without placeholders."""
     model = genai.GenerativeModel("gemini-1.5-flash")
-    response = model.generate_content(
-    f"""
-    Write a complete professional, polite email based on this instruction: {prompt}.
-       RULES:
-        - NEVER use placeholders.
-        - NEVER invent fake details.
-        - Include greeting, body, closing, signature.
-        - End with:
+    try:
+        response = model.generate_content(
+            f"""
+            Write a complete professional, polite email based on this instruction: {prompt}.
+            
+            RULES:
+            - NEVER use placeholders.
+            - NEVER invent fake details.
+            - Include greeting, body, closing, signature.
+            - End with:
+                Prachi Adhalage
+                Software Engineer
+                [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
+            Format exactly:
+            Subject: <short subject>
+            Body:
+            Dear <recipient/generic>,
+            <body>
+            Sincerely,
             Prachi Adhalage
-            Software Engineer
             [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
-        Format exactly:
-        Subject: <short subject>
-        Body:
-        Dear <recipient/generic>,
-        <body>
-        Sincerely,
-        Prachi Adhalage
-        [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
-        """,
-    
-    timeout=60  # Timeout in seconds (increase as needed)
-    )
+            """,
+            timeout=60  # Timeout in seconds
+        )
 
-        
-        
-    text = response.text.strip()
-    print("Gemini response text:", text)  # Debug to check output
+        text = response.text.strip()
+        print("Gemini response text:", text)  # Debug to check output
 
-    subject = ""
-    body = ""
+        subject = ""
+        body = ""
 
-    subject_match = re.search(r"Subject:\s*(.*)", text)
-    body_match = re.search(r"Body:\s*(.*)", text, re.DOTALL)
+        subject_match = re.search(r"Subject:\s*(.*)", text)
+        body_match = re.search(r"Body:\s*(.*)", text, re.DOTALL)
 
-    if subject_match:
-        subject = subject_match.group(1).strip()
-    else:
-        print("Warning: Subject not found in API response.")
+        if subject_match:
+            subject = subject_match.group(1).strip()
+        else:
+            print("Warning: Subject not found in API response.")
 
-    if body_match:
-        body = body_match.group(1).strip()
-    else:
-        print("Warning: Body not found in API response.")
+        if body_match:
+            body = body_match.group(1).strip()
+        else:
+            print("Warning: Body not found in API response.")
 
-    return subject, body
+        return subject, body
+    except Exception as e:
+        st.error(f"Gemini API error: {e}")
+        return "", ""
 
 
 
