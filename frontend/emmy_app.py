@@ -90,7 +90,7 @@ def ai_generate_email(prompt):
             Prachi Adhalage
             [prachiadhalage@gmail.com](mailto:prachiadhalage@gmail.com)
             """,
-            timeout=60  # Timeout in seconds
+            #timeout=60  # Timeout in seconds
         )
 
         text = response.text.strip()
