@@ -119,7 +119,19 @@ def ai_generate_email(prompt):
 
 
 
-if st.button("✨ Generate Draft"):
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    generate_clicked = st.button("✨ Generate Draft")
+
+with col2:
+    clear_clicked = st.button("🧹 Clear Drafts")
+
+if clear_clicked:
+    st.session_state.chat_history = []
+    st.success("Drafts cleared!")
+
+if generate_clicked:
     if not to or not prompt:
         st.warning("Please enter both recipient email and prompt.")
     else:
@@ -131,6 +143,7 @@ if st.button("✨ Generate Draft"):
             "body": body,
             "attachment": uploaded_file
         })
+
 
 
 for idx, msg in enumerate(st.session_state.chat_history):
@@ -161,7 +174,7 @@ for idx, msg in enumerate(st.session_state.chat_history):
                     "file": (msg["attachment"].name, msg["attachment"].getvalue())
                 }
             try:
-                response = requests.post(f"{BACKEND_URL}/send_email", json=payload, files=files)
+                response = requests.post(f"{BACKEND_URL}/send_email", data=payload, files=files)
                 if response.ok:
                     st.success("✅ Email sent successfully!")
                 else:

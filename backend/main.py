@@ -13,6 +13,8 @@ from googleapiclient.discovery import build
 import base64
 from email.mime.text import MIMEText
 
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+
 app = FastAPI()
 
 DB_PATH = os.path.join(os.getcwd(), "backend", "db.sqlite")
@@ -112,12 +114,58 @@ def get_authenticated_user():
         return JSONResponse({"email": None}, status_code=404)
     return {"email": row[0]}
 
-# Pydantic model for send_email request validation
-class EmailRequest(BaseModel):
-    user_email: str
-    recipient: str
-    subject: str
-    body: str
+
+@app.post("/send_email")
+async def send_email(
+    user_email: str = Form(...),
+    recipient: str = Form(...),
+    subject: str = Form(...),
+    body: str = Form(...),
+    file: UploadFile | None = File(None)
+):
+    # Get credentials and initialization code (your existing logic)
+    creds = get_credentials(user_email)
+    if not creds:
+        raise HTTPException(status_code=403, detail="User not authenticated")
+    
+    service = build("gmail", "v1", credentials=creds)
+    
+    message = MIMEText(body)
+    message["to"] = recipient
+    message["subject"] = subject
+    
+    if file:
+        file_contents = await file.read()  # bytes of the uploaded file
+        
+        # For attachments, you need to create a MIME multipart message.
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.base import MIMEBase
+        from email import encoders
+
+        msg = MIMEMultipart()
+        msg.attach(message)
+        msg["to"] = recipient
+        msg["subject"] = subject
+
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(file_contents)
+        encoders.encode_base64(part)
+        part.add_header(
+            "Content-Disposition",
+            f"attachment; filename={file.filename}",
+        )
+        msg.attach(part)
+
+        raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    else:
+        # No attachment, just send simple message
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+
+    service.users().messages().send(userId="me", body={"raw": raw_message}).execute()
+
+    return {"message": "Email sent successfully!"}
+
+
 
 # Helper function to get Credentials object from DB JSON
 def get_credentials(user_email: str):
@@ -137,18 +185,49 @@ def get_credentials(user_email: str):
     return creds
 
 # Email sending endpoint
+from fastapi import UploadFile, File, Form
+
 @app.post("/send_email")
-async def send_email(data: EmailRequest):
-    creds = get_credentials(data.user_email)
+async def send_email(
+    user_email: str = Form(...),
+    recipient: str = Form(...),
+    subject: str = Form(...),
+    body: str = Form(...),
+    file: UploadFile | None = File(None)
+):
+    creds = get_credentials(user_email)
     if not creds:
         raise HTTPException(status_code=403, detail="User not authenticated")
 
     service = build("gmail", "v1", credentials=creds)
+    
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.base import MIMEBase
+    from email.mime.text import MIMEText
+    from email import encoders
+    import base64
 
-    message = MIMEText(data.body)
-    message["to"] = data.recipient
-    message["subject"] = data.subject
-    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    message = MIMEText(body)
+    
+    if file:
+        file_content = await file.read()
+
+        msg = MIMEMultipart()
+        msg.attach(message)
+        msg["to"] = recipient
+        msg["subject"] = subject
+
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(file_content)
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", f"attachment; filename={file.filename}")
+        msg.attach(part)
+
+        raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    else:
+        message["to"] = recipient
+        message["subject"] = subject
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
     service.users().messages().send(userId="me", body={"raw": raw_message}).execute()
 
