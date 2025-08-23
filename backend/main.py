@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -6,14 +6,14 @@ import sqlite3
 import os
 import json
 
-
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 import base64
 from email.mime.text import MIMEText
-
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 
 app = FastAPI()
 
@@ -42,7 +42,7 @@ conn.close()
 # Allow frontend requests (Update with your actual Streamlit frontend URL, no trailing slash)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://emmy-email-assistant.streamlit.app/"],
+    allow_origins=["https://emmy-email-assistant.streamlit.app"],  # No trailing slash
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,17 +55,14 @@ SCOPES = [
 
 REDIRECT_URI = "https://emmy-email-assistant.onrender.com/oauth2callback"
 
-
 # Endpoint to get OAuth authorization URL
 @app.get("/auth-url")
 def get_auth_url():
-    FLOW_SECRET_PATH = "/etc/secrets/GOOGLE_CLIENT_SECRETS"  # (Render/production path)
- # use correct path for production
+    FLOW_SECRET_PATH = "/etc/secrets/GOOGLE_CLIENT_SECRETS"  # Use your actual secrets path
     flow = Flow.from_client_secrets_file(FLOW_SECRET_PATH, scopes=SCOPES, redirect_uri=REDIRECT_URI)
 
-    
     auth_url, _ = flow.authorization_url(
-        prompt="consent",
+        prompt="select_account",         # Force Google to show account selector every time
         access_type="offline",
         include_granted_scopes="true",
     )
@@ -75,10 +72,8 @@ def get_auth_url():
 @app.get("/oauth2callback")
 def oauth2callback(request: Request):
     try:
-        FLOW_SECRET_PATH = "/etc/secrets/GOOGLE_CLIENT_SECRETS"  # (Render/production path)
-
+        FLOW_SECRET_PATH = "/etc/secrets/GOOGLE_CLIENT_SECRETS"  # Use your actual secrets path
         flow = Flow.from_client_secrets_file(FLOW_SECRET_PATH, scopes=SCOPES, redirect_uri=REDIRECT_URI)
-
         flow.fetch_token(authorization_response=str(request.url))
 
         creds = flow.credentials
@@ -95,7 +90,6 @@ def oauth2callback(request: Request):
         conn.close()
 
         return JSONResponse({"message": "Authentication successful!", "email": email})
-
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -114,59 +108,6 @@ def get_authenticated_user():
         return JSONResponse({"email": None}, status_code=404)
     return {"email": row[0]}
 
-
-@app.post("/send_email")
-async def send_email(
-    user_email: str = Form(...),
-    recipient: str = Form(...),
-    subject: str = Form(...),
-    body: str = Form(...),
-    file: UploadFile | None = File(None)
-):
-    # Get credentials and initialization code (your existing logic)
-    creds = get_credentials(user_email)
-    if not creds:
-        raise HTTPException(status_code=403, detail="User not authenticated")
-    
-    service = build("gmail", "v1", credentials=creds)
-    
-    message = MIMEText(body)
-    message["to"] = recipient
-    message["subject"] = subject
-    
-    if file:
-        file_contents = await file.read()  # bytes of the uploaded file
-        
-        # For attachments, you need to create a MIME multipart message.
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.base import MIMEBase
-        from email import encoders
-
-        msg = MIMEMultipart()
-        msg.attach(message)
-        msg["to"] = recipient
-        msg["subject"] = subject
-
-        part = MIMEBase("application", "octet-stream")
-        part.set_payload(file_contents)
-        encoders.encode_base64(part)
-        part.add_header(
-            "Content-Disposition",
-            f"attachment; filename={file.filename}",
-        )
-        msg.attach(part)
-
-        raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    else:
-        # No attachment, just send simple message
-        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-
-    service.users().messages().send(userId="me", body={"raw": raw_message}).execute()
-
-    return {"message": "Email sent successfully!"}
-
-
-
 # Helper function to get Credentials object from DB JSON
 def get_credentials(user_email: str):
     try:
@@ -184,9 +125,7 @@ def get_credentials(user_email: str):
     creds = Credentials.from_authorized_user_info(token_info, SCOPES)
     return creds
 
-# Email sending endpoint
-from fastapi import UploadFile, File, Form
-
+# Email sending endpoint with file attachment support
 @app.post("/send_email")
 async def send_email(
     user_email: str = Form(...),
@@ -200,15 +139,9 @@ async def send_email(
         raise HTTPException(status_code=403, detail="User not authenticated")
 
     service = build("gmail", "v1", credentials=creds)
-    
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.base import MIMEBase
-    from email.mime.text import MIMEText
-    from email import encoders
-    import base64
 
     message = MIMEText(body)
-    
+
     if file:
         file_content = await file.read()
 
@@ -232,3 +165,17 @@ async def send_email(
     service.users().messages().send(userId="me", body={"raw": raw_message}).execute()
 
     return {"message": "Email sent successfully!"}
+
+# logout code this is 
+
+@app.post("/logout")
+async def logout(user_email: str = Form(...)):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM tokens WHERE email=?", (user_email,))
+        conn.commit()
+        conn.close()
+        return {"message": f"User {user_email} logged out successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Logout failed: {e}")

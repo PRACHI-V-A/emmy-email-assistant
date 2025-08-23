@@ -58,6 +58,20 @@ if st.button("🔑 Authenticate with Gmail"):
     except Exception as e:
         st.error(f"Error while getting authentication URL: {e}")
 
+if "user_email" in st.session_state and st.session_state.user_email:
+    if st.button("🚪 Logout"):
+        try:
+            response = requests.post(f"{BACKEND_URL}/logout", data={"user_email": st.session_state.user_email})
+            if response.ok:
+                st.success("Logged out successfully!")
+                del st.session_state.user_email  # Clear user email in frontend
+                st.session_state.chat_history = []  # Optional: clear drafts on logout
+            else:
+                st.error(f"Logout failed: {response.text}")
+        except Exception as e:
+            st.error(f"Error during logout: {e}")
+
+
 to = st.text_input("Recipient Email")
 prompt = st.text_area("What should Emmy write?")
 uploaded_file = st.file_uploader("📎 Attach a file (optional)", type=["pdf", "docx", "txt", "png", "jpg", "jpeg"])
